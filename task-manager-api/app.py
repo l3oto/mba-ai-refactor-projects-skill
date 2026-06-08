@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()  # Must run before any import that reads os.getenv() at module level
+
 from flask import Flask
 from flask_cors import CORS
 from database import db
@@ -6,9 +9,6 @@ from routes.user_routes import user_bp
 from routes.report_routes import report_bp
 import os
 import datetime
-from dotenv import load_dotenv
-
-load_dotenv()
 
 app = Flask(__name__)
 

@@ -6,7 +6,7 @@ from datetime import datetime
 import re
 import logging
 
-from utils.auth import generate_token
+from utils.auth import generate_token, require_auth
 
 logger = logging.getLogger(__name__)
 user_bp = Blueprint('users', __name__)
@@ -119,7 +119,10 @@ def update_user(user_id):
 
 
 @user_bp.route('/users/<int:user_id>', methods=['DELETE'])
+@require_auth
 def delete_user(user_id):
+    if request.user_role != 'admin':
+        return jsonify({'error': 'Acesso negado — requer role admin'}), 403
     user = db.session.get(User, user_id)
     if not user:
         return jsonify({'error': 'Usuário não encontrado'}), 404

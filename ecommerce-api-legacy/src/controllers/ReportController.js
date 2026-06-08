@@ -31,6 +31,15 @@ async function financialReport(req, res) {
 async function deleteUser(req, res) {
     const id = parseInt(req.params.id);
     try {
+        const { getDb } = require('../models/Database');
+        const user = await new Promise((resolve, reject) => {
+            getDb().get("SELECT id FROM users WHERE id = ?", [id], (err, row) => {
+                if (err) reject(err); else resolve(row || null);
+            });
+        });
+        if (!user) {
+            return res.status(404).json({ error: 'Usuário não encontrado' });
+        }
         await UserModel.deleteById(id);
         return res.json({ message: 'Usuário e dados relacionados deletados' });
     } catch (err) {

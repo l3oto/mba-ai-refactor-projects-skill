@@ -6,6 +6,7 @@ from models.category import Category
 from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
+from utils.auth import require_auth
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,6 +14,7 @@ report_bp = Blueprint('reports', __name__)
 
 
 @report_bp.route('/reports/summary', methods=['GET'])
+@require_auth
 def summary_report():
     total_tasks = Task.query.count()
     total_users = User.query.count()
@@ -85,6 +87,7 @@ def summary_report():
 
 
 @report_bp.route('/reports/user/<int:user_id>', methods=['GET'])
+@require_auth
 def user_report(user_id):
     user = db.session.get(User, user_id)
     if not user:

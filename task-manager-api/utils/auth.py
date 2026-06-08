@@ -5,8 +5,14 @@ from functools import wraps
 from flask import request, jsonify
 
 
-SECRET_KEY = os.getenv('SECRET_KEY', '')
 TOKEN_EXPIRY_HOURS = 24
+
+
+def _secret_key():
+    key = os.getenv('SECRET_KEY', '')
+    if not key:
+        raise EnvironmentError('SECRET_KEY environment variable is required')
+    return key
 
 
 def generate_token(user_id, role):
@@ -15,12 +21,12 @@ def generate_token(user_id, role):
         'role': role,
         'exp': datetime.now(timezone.utc) + timedelta(hours=TOKEN_EXPIRY_HOURS),
     }
-    return jwt.encode(payload, SECRET_KEY, algorithm='HS256')
+    return jwt.encode(payload, _secret_key(), algorithm='HS256')
 
 
 def decode_token(token):
     try:
-        return jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+        return jwt.decode(token, _secret_key(), algorithms=['HS256'])
     except jwt.ExpiredSignatureError:
         return None
     except jwt.InvalidTokenError:
