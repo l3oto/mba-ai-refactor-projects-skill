@@ -1,8 +1,271 @@
-# Criação de Skills — Refatoração Arquitetural Automatizada
+# Skill de Auditoria e Refatoração Arquitetural
 
-Ao longo do curso você aprendeu o que são Skills e como elas permitem que um agente de IA atue como um especialista em tarefas específicas. Agora imagine o seguinte cenário: você herdou 3 projetos legados com problemas de arquitetura, segurança e qualidade de código. Revisar e corrigir tudo manualmente levaria dias.
+Skill para Claude Code que automatiza a análise, auditoria e refatoração de projetos legados para o padrão MVC, independente da tecnologia (Python/Flask ou Node.js/Express).
 
-Neste desafio, você vai criar uma Skill que automatiza esse processo — analisando, auditando e refatorando qualquer projeto para o padrão MVC, independente da tecnologia.
+---
+
+## Análise Manual
+
+### Projeto 1 — code-smells-project (Python/Flask)
+
+| Severidade | Problema | Arquivo |
+|------------|----------|---------|
+| CRITICAL | SQL Injection em todas as queries por concatenação de string | `models.py:28, 48-50, 109-113, 289-292` |
+| CRITICAL | SECRET_KEY hardcoded no código-fonte | `app.py:7` |
+| CRITICAL | Chave secreta exposta na resposta do endpoint `/health` | `controllers.py:289` |
+| CRITICAL | Endpoint `/admin/query` executa SQL arbitrário sem autenticação | `app.py:59-78` |
+| CRITICAL | Endpoint `/admin/reset-db` apaga todo o banco sem autenticação | `app.py:47-57` |
+| HIGH | Lógica de negócio na camada de dados (desconto em `relatorio_vendas`) | `models.py:257-263` |
+| HIGH | Notificações inline no controller (email/SMS/push como print statements) | `controllers.py:208-210` |
+| HIGH | Senhas em texto plano e retornadas na API | `models.py:79, 96-97` |
+| MEDIUM | Validação duplicada entre `criar_produto` e `atualizar_produto` | `controllers.py:28-86` |
+| MEDIUM | N+1 queries em pedidos (3 cursors aninhados por pedido) | `models.py:171-233` |
+| MEDIUM | Conexão global sem thread-safety | `database.py:4` |
+| LOW | Import não utilizado `get_db` em controllers | `controllers.py:2` |
+| LOW | Variável `id` sobrescreve built-in Python | `controllers.py:56, 160` |
+
+### Projeto 2 — ecommerce-api-legacy (Node.js/Express)
+
+| Severidade | Problema | Arquivo |
+|------------|----------|---------|
+| CRITICAL | God Class: AppManager mistura DB, rotas, pagamento e logs | `src/AppManager.js:1-141` |
+| CRITICAL | Credenciais de produção hardcoded (`pk_live_`, senha BD) | `src/utils.js:1-7` |
+| CRITICAL | Número de cartão de crédito logado no console | `src/AppManager.js:45` |
+| CRITICAL | "Hash" de senha completamente quebrado (Base64 substring) | `src/utils.js:17-23` |
+| HIGH | Relatório financeiro admin sem autenticação | `src/AppManager.js:80-129` |
+| HIGH | DELETE de usuário deixa registros órfãos (reconhecido no código) | `src/AppManager.js:131-137` |
+| HIGH | Estado global mutável para cache e receita | `src/utils.js:9-10` |
+| MEDIUM | N+1 queries em relatório (queries aninhadas em callbacks) | `src/AppManager.js:88-128` |
+| MEDIUM | SQLite in-memory — dados perdidos no restart | `src/AppManager.js:7` |
+| MEDIUM | Nomes de variáveis ofuscados (`u`, `e`, `p`, `cid`, `cc`) | `src/AppManager.js:29-33` |
+| LOW | Respostas de erro em texto plano ao invés de JSON | `src/AppManager.js:35, 38, 41` |
+| LOW | Validação de cartão por prefixo "4" (mock não-funcional) | `src/AppManager.js:47` |
+
+### Projeto 3 — task-manager-api (Python/Flask)
+
+| Severidade | Problema | Arquivo |
+|------------|----------|---------|
+| CRITICAL | Token JWT fake e não validado em nenhuma rota | `routes/user_routes.py:210` |
+| HIGH | SECRET_KEY hardcoded | `app.py:13` |
+| HIGH | Senha hash com MD5 (quebrado) | `models/user.py:29, 32` |
+| MEDIUM | Cálculo de overdue duplicado em 5 lugares (método `is_overdue()` existe mas nunca usado) | `routes/task_routes.py:31-38, 71-80, 282-287` |
+| MEDIUM | N+1 queries no relatório (Task.query por usuário dentro de loop) | `routes/report_routes.py:53-67` |
+| MEDIUM | `except:` sem tipo captura tudo silenciosamente | `routes/task_routes.py:62, 138, 224` |
+| MEDIUM | Construção manual de dict ignorando `to_dict()` já disponível | `routes/task_routes.py:17-29` |
+| LOW | `.query.get()` depreciado no SQLAlchemy 2.0 (7 ocorrências) | múltiplos |
+| LOW | Campo `password` exposto em `User.to_dict()` | `models/user.py:20-21` |
+| LOW | Imports não usados (`json`, `os`, `sys`, `time`) | `routes/task_routes.py:7` |
+
+---
+
+## Construção da Skill
+
+### Estrutura da Skill
+
+A skill está em `.claude/skills/refactor-arch/` e contém:
+
+```
+refactor-arch/
+├── SKILL.md                     ← instrução das 3 fases com regras de comportamento
+├── 01-project-analysis.md       ← heurísticas de detecção de stack e arquitetura
+├── 02-antipatterns-catalog.md   ← 12 anti-patterns com sinais de detecção e severidade
+├── 03-report-template.md        ← formato exato do relatório de auditoria
+├── 04-architecture-guidelines.md ← estrutura MVC alvo para Python e Node.js
+└── 05-refactoring-playbook.md   ← 10 padrões de transformação com exemplos antes/depois
+```
+
+### Decisões de Design
+
+**SKILL.md como orquestrador**: O arquivo principal instrui o agente a carregar os arquivos de referência antes de executar qualquer fase. Isso separa o "o que fazer" (SKILL.md) do "como fazer" (arquivos de referência).
+
+**Anti-patterns com sinais concretos**: Em vez de descrições genéricas ("código ruim"), cada anti-pattern tem sinais de detecção literais: `"SELECT * FROM x WHERE id = " + str(id)`. Isso permite que o agente faça grep/busca textual nos arquivos.
+
+**Formato de relatório prescritivo**: O template define campo a campo o que reportar (arquivo, linha, descrição, impacto, recomendação), garantindo consistência entre os 3 projetos.
+
+**Playbook com before/after**: Cada padrão de transformação inclui código real das linguagens-alvo. O agente tem um exemplo concreto para seguir em vez de inferir o padrão.
+
+**Agnóstica de tecnologia**: A detecção de stack usa tabelas de heurísticas por linguagem. O playbook cobre Python e Node.js. As guidelines de arquitetura têm seções separadas para cada stack.
+
+### Anti-patterns no Catálogo
+
+12 anti-patterns cobrindo: SQL Injection, Hardcoded Credentials, God Class, Unauthenticated Endpoints, Business Logic in Wrong Layer, N+1 Queries, Duplicate Code, Weak Crypto, Fake Auth, Deprecated API, Global Mutable State, Silent Exception Swallowing.
+
+Distribuição: CRITICAL (4), HIGH (3), MEDIUM (3), LOW (2).
+
+### Agnosticismo de Tecnologia
+
+- `01-project-analysis.md`: tabelas separadas para Python e Node.js
+- `02-antipatterns-catalog.md`: sinais de detecção cobrem Python e JavaScript
+- `05-refactoring-playbook.md`: exemplos de código em ambas as linguagens
+- `SKILL.md`: instrui o agente a "adaptar à stack detectada"
+
+---
+
+## Resultados
+
+### Resumo dos Relatórios
+
+| Projeto | CRITICAL | HIGH | MEDIUM | LOW | Total |
+|---------|----------|------|--------|-----|-------|
+| code-smells-project | 5 | 3 | 3 | 2 | 13 |
+| ecommerce-api-legacy | 4 | 3 | 3 | 2 | 12 |
+| task-manager-api | 1 | 2 | 4 | 3 | 10 |
+
+### Comparação de Estrutura
+
+**Projeto 1 — code-smells-project**
+
+Antes:
+```
+app.py            ← rotas + admin endpoints perigosos
+controllers.py    ← validação + notificações + orquestração misturadas
+models.py         ← queries SQL por concatenação + lógica de negócio
+database.py       ← conexão global
+```
+
+Depois:
+```
+src/
+├── app.py                         ← composition root
+├── config/settings.py             ← config por env vars
+├── models/produto_model.py        ← queries parametrizadas
+├── models/usuario_model.py        ← bcrypt para senha
+├── models/pedido_model.py         ← JOIN query (sem N+1)
+├── controllers/produto_controller.py
+├── controllers/usuario_controller.py
+├── controllers/pedido_controller.py
+├── views/routes.py                ← blueprint, rotas finas
+├── services/notification_service.py
+└── middleware/error_handler.py
+```
+
+**Projeto 2 — ecommerce-api-legacy**
+
+Antes: AppManager.js (141 linhas) + utils.js (credenciais hardcoded)
+
+Depois:
+```
+src/
+├── app.js                         ← composition root
+├── config/settings.js             ← config por process.env
+├── models/Database.js             ← init e conexão
+├── models/UserModel.js            ← operações de usuário (+ cascade delete)
+├── models/CourseModel.js
+├── models/EnrollmentModel.js      ← JOIN para relatório (sem N+1)
+├── controllers/CheckoutController.js ← bcrypt (sem log de cartão)
+├── controllers/ReportController.js
+├── routes/checkoutRoutes.js       ← rotas finas
+└── middleware/errorHandler.js
+```
+
+**Projeto 3 — task-manager-api**
+
+Antes: estrutura MVC parcial com JWT fake, MD5, overdue duplicado, N+1
+
+Depois: mesma estrutura com:
+- JWT real via PyJWT (tokens assinados com SECRET_KEY)
+- Senha via werkzeug (bcrypt)
+- `is_overdue()` centralizado no model
+- `joinedload` no relatório (sem N+1)
+- `db.session.get()` no lugar do `.query.get()` depreciado
+- Bare `except:` substituídos por `except Exception as e:` com logging
+
+### Checklist de Validação
+
+**Projeto 1 — code-smells-project**
+- [x] Linguagem detectada: Python
+- [x] Framework detectado: Flask 3.1.1
+- [x] Domínio: E-commerce API (produtos, pedidos, usuários)
+- [x] 4 arquivos analisados
+- [x] Relatório com template correto (13 findings)
+- [x] Findings com arquivo e linha exatos
+- [x] Ordenados por severidade
+- [x] 13 findings (>= 5)
+- [x] Skill pausa antes da Fase 3
+- [x] Estrutura MVC criada em `src/`
+- [x] Config extraída para `src/config/settings.py`
+- [x] Models com queries parametrizadas
+- [x] Controllers com lógica de orquestração
+- [x] Views/Routes com blueprint Flask
+- [x] Error handler centralizado
+- [x] Aplicação inicia sem erros (`GET /health: 200`)
+- [x] Endpoints respondem (`GET /produtos: 200`, `POST /produtos: 201`)
+
+**Projeto 2 — ecommerce-api-legacy**
+- [x] Linguagem detectada: Node.js
+- [x] Framework detectado: Express 4.x
+- [x] Domínio: LMS com fluxo de checkout
+- [x] 3 arquivos analisados
+- [x] Relatório com 12 findings (>= 5), 4 CRITICAL
+- [x] Skill pausa antes da Fase 3
+- [x] Estrutura MVC em `src/`
+- [x] Config extraída para `src/config/settings.js`
+- [x] Credenciais removidas do código (uso de `process.env`)
+- [x] Senha com bcrypt (sem log de cartão)
+- [x] Aplicação inicia sem erros
+- [x] Endpoints respondem (`POST /api/checkout: 200`)
+
+**Projeto 3 — task-manager-api**
+- [x] Linguagem detectada: Python
+- [x] Framework detectado: Flask 3.0 + SQLAlchemy
+- [x] Domínio: Task Manager API
+- [x] 10 arquivos analisados
+- [x] Relatório com 10 findings (>= 5), 1 CRITICAL
+- [x] Skill pausa antes da Fase 3
+- [x] JWT real substituindo fake token
+- [x] Senha com werkzeug (bcrypt)
+- [x] `is_overdue()` centralizado
+- [x] `joinedload` no relatório
+- [x] Aplicação inicia sem erros
+- [x] Endpoints respondem (`GET /health: 200`, `POST /login: 200`)
+
+---
+
+## Como Executar
+
+### Pré-requisitos
+
+- Claude Code instalado e configurado
+- Python 3.9+ (projetos 1 e 3)
+- Node.js 18+ (projeto 2)
+
+### Executar a skill em cada projeto
+
+```bash
+# Projeto 1
+cd code-smells-project
+claude "/refactor-arch"
+
+# Projeto 2
+cd ../ecommerce-api-legacy
+claude "/refactor-arch"
+
+# Projeto 3
+cd ../task-manager-api
+claude "/refactor-arch"
+```
+
+### Validar projetos refatorados
+
+```bash
+# Projeto 1 — Python/Flask
+cd code-smells-project
+pip install -r requirements.txt
+SECRET_KEY=minha-chave python src/app.py
+# GET http://localhost:5000/health → 200
+
+# Projeto 2 — Node.js/Express
+cd ecommerce-api-legacy
+npm install
+node src/app.js
+# POST http://localhost:3000/api/checkout → 200
+
+# Projeto 3 — Python/Flask + SQLAlchemy
+cd task-manager-api
+pip install -r requirements.txt
+SECRET_KEY=minha-chave python app.py
+# GET http://localhost:5000/health → 200
+```
 
 ## Objetivo
 

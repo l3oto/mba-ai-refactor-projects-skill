@@ -4,13 +4,21 @@ from database import db
 from routes.task_routes import task_bp
 from routes.user_routes import user_bp
 from routes.report_routes import report_bp
-import os, sys, json, datetime
+import os
+import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///tasks.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///tasks.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'super-secret-key-123'
+
+secret_key = os.getenv('SECRET_KEY')
+if not secret_key:
+    raise EnvironmentError('SECRET_KEY environment variable is required')
+app.config['SECRET_KEY'] = secret_key
 
 CORS(app)
 db.init_app(app)
