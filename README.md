@@ -219,6 +219,64 @@ Depois: mesma estrutura com:
 - [x] Aplicação inicia sem erros
 - [x] Endpoints respondem (`GET /health: 200`, `POST /login: 200`)
 
+### Logs de Verificação (clone limpo)
+
+Verificação executada a partir de um `git clone` novo do repositório (commit `b2f8447`), sem reaproveitar nenhum estado local, para confirmar que as 3 aplicações sobem e respondem corretamente após a refatoração.
+
+**Projeto 1 — code-smells-project**
+```
+$ SECRET_KEY=verify-key python src/app.py
+
+$ curl -i http://localhost:5000/health
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.8 Python/3.12.3
+Content-Type: application/json
+Content-Length: 89
+
+$ curl -i http://localhost:5000/produtos
+HTTP/1.1 200 OK
+Content-Type: application/json
+Content-Length: 1677
+```
+
+**Projeto 2 — ecommerce-api-legacy**
+```
+$ SECRET_KEY=verify-key node src/app.js
+
+$ curl -i -X POST http://localhost:3000/api/checkout -d '{"name":"Verify","email":"verify@x.com","password":"123","course_id":1,"card_number":"4111111111111111"}'
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Content-Length: 35
+
+$ curl -i http://localhost:3000/api/admin/financial-report
+HTTP/1.1 401 Unauthorized
+Content-Length: 38
+
+$ curl -i -H "Authorization: Bearer <token de admin>" http://localhost:3000/api/admin/financial-report
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Content-Length: 171
+```
+
+**Projeto 3 — task-manager-api**
+```
+$ SECRET_KEY=verify-key python app.py
+
+$ curl -i http://localhost:5000/categories
+HTTP/1.1 200 OK
+Content-Type: application/json
+Content-Length: 558
+
+$ curl -i http://localhost:5000/reports/summary
+HTTP/1.1 401 UNAUTHORIZED
+Content-Length: 43
+
+$ curl -i -H "Authorization: Bearer <token>" http://localhost:5000/reports/summary
+HTTP/1.1 200 OK
+Content-Type: application/json
+Content-Length: 822
+```
+
 ---
 
 ## Como Executar
