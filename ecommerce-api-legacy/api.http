@@ -24,8 +24,18 @@ Content-Type: application/json
   "card": "5111222233334444"
 }
 
-### Relatório financeiro administrativo
+### Login admin (retorna JWT)
+POST {{baseUrl}}/api/login
+Content-Type: application/json
+
+{
+  "email": "leonan@fullcycle.com.br",
+  "password": "admin123"
+}
+
+### Relatório financeiro administrativo (requer token de admin)
 GET {{baseUrl}}/api/admin/financial-report
+Authorization: Bearer COLOQUE_O_TOKEN_DO_LOGIN_AQUI
 
 ### Deletar usuário
 DELETE {{baseUrl}}/api/users/1

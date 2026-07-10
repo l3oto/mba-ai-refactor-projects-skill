@@ -2,6 +2,9 @@ const EnrollmentModel = require('../models/EnrollmentModel');
 const UserModel = require('../models/UserModel');
 
 async function financialReport(req, res) {
+    if (req.userRole !== 'admin') {
+        return res.status(403).json({ error: 'Acesso negado — requer role admin' });
+    }
     try {
         const rows = await EnrollmentModel.getFinancialReport();
 

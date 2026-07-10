@@ -9,11 +9,11 @@ function findByEmail(email) {
     });
 }
 
-function create(name, email, passwordHash) {
+function create(name, email, passwordHash, role = 'user') {
     return new Promise((resolve, reject) => {
         getDb().run(
-            "INSERT INTO users (name, email, pass) VALUES (?, ?, ?)",
-            [name, email, passwordHash],
+            "INSERT INTO users (name, email, pass, role) VALUES (?, ?, ?, ?)",
+            [name, email, passwordHash, role],
             function(err) {
                 if (err) reject(err);
                 else resolve(this.lastID);
